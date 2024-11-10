@@ -1,68 +1,73 @@
 //!
-//! Stylus Hello World
-//!
-//! The following contract implements the Counter example from Foundry.
-//!
-//! ```
-//! contract Counter {
-//!     uint256 public number;
-//!     function setNumber(uint256 newNumber) public {
-//!         number = newNumber;
-//!     }
-//!     function increment() public {
-//!         number++;
-//!     }
-//! }
-//! ```
-//!
-//! The program is ABI-equivalent with Solidity, which means you can call it from both Solidity and Rust.
-//! To do this, run `cargo stylus export-abi`.
-//!
-//! Note: this code is a template-only and has not been audited.
-//!
+//! Stylus Receiver Smart Contract
+//! 
+//! Description: this smart contract only receives and process messages from another smart contract
 
-// Allow `cargo stylus export-abi` to generate a main function.
 #![cfg_attr(not(feature = "export-abi"), no_main)]
 extern crate alloc;
 
-/// Import items from the SDK. The prelude contains common traits and macros.
-use stylus_sdk::{alloy_primitives::U256, prelude::*};
+use alloy_primitives::U256;
+use stylus_sdk::{msg, prelude::*};
 
-// Define some persistent storage using the Solidity ABI.
-// `Counter` will be the entrypoint.
+
 sol_storage! {
     #[entrypoint]
-    pub struct Counter {
+    pub struct ReceiverSmartContract {
+        bool initialized;
+        address owner;
+        address executable_smart_contract;
         uint256 number;
     }
 }
 
-/// Declare that `Counter` is a contract with the following external methods.
 #[public]
-impl Counter {
-    /// Gets the number from storage.
-    pub fn number(&self) -> U256 {
+impl ReceiverSmartContract {
+    fn init(&mut self) -> Result<(), Vec<u8>>{
+        let initialized = self.initialized.get();
+        if initialized {
+            return Err("Already initialized".into());
+        }
+
+        self.initialized.set(true);
+        self.owner.set(msg::sender());
+        self.number.set(U256::from(0));
+
+        Ok(())
+    }
+
+    fn set_smart_contract(&mut self) -> Result<(), Vec<u8>>{
+        let initialized = self.initialized.get();
+        if !initialized {
+            return Err("Not initialized".into());
+        }
+        
+        let owner = self.owner.get();
+        if owner != msg::sender() {
+            return Err("Only the owner can set the executable smart contract".into());
+        }
+
+        self.executable_smart_contract.set(msg::sender());
+        Ok(())
+    }
+
+    fn view_number(&self) -> U256{
         self.number.get()
     }
 
-    /// Sets a number in storage to a user-specified value.
-    pub fn set_number(&mut self, new_number: U256) {
-        self.number.set(new_number);
-    }
+    fn execute(&mut self) -> Result<(), Vec<u8>>{
+        let initialized = self.initialized.get();
+        if !initialized {
+            return Err("Not initialized".into());
+        }
 
-    /// Sets a number in storage to a user-specified value.
-    pub fn mul_number(&mut self, new_number: U256) {
-        self.number.set(new_number * self.number.get());
-    }
+        let executable_smart_contract = self.executable_smart_contract.get();
+        if executable_smart_contract != msg::sender() {
+            return Err("Only the executable smart contract can execute the execute method".into());
+        }
 
-    /// Sets a number in storage to a user-specified value.
-    pub fn add_number(&mut self, new_number: U256) {
-        self.number.set(new_number + self.number.get());
-    }
-
-    /// Increments `number` and updates its value in storage.
-    pub fn increment(&mut self) {
         let number = self.number.get();
-        self.set_number(number + U256::from(1));
+        self.number.set(number + U256::from(1));
+
+        Ok(())
     }
 }
