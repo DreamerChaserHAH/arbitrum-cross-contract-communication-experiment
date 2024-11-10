@@ -1,68 +1,50 @@
 //!
 //! Stylus Hello World
 //!
-//! The following contract implements the Counter example from Foundry.
-//!
-//! ```
-//! contract Counter {
-//!     uint256 public number;
-//!     function setNumber(uint256 newNumber) public {
-//!         number = newNumber;
-//!     }
-//!     function increment() public {
-//!         number++;
-//!     }
-//! }
-//! ```
-//!
-//! The program is ABI-equivalent with Solidity, which means you can call it from both Solidity and Rust.
-//! To do this, run `cargo stylus export-abi`.
-//!
-//! Note: this code is a template-only and has not been audited.
-//!
+//! This contract will be used to trigger the execute function from the receiver smart contract, ideally any wallet will be able to call it
 
 // Allow `cargo stylus export-abi` to generate a main function.
 #![cfg_attr(not(feature = "export-abi"), no_main)]
 extern crate alloc;
 
-/// Import items from the SDK. The prelude contains common traits and macros.
-use stylus_sdk::{alloy_primitives::U256, prelude::*};
+use alloy_primitives::{address, Address, U256};
+use stylus_sdk::prelude::*;
 
-// Define some persistent storage using the Solidity ABI.
-// `Counter` will be the entrypoint.
-sol_storage! {
-    #[entrypoint]
-    pub struct Counter {
-        uint256 number;
+sol_interface!{
+    interface IReceiverSmartContract {
+        function init() external;
+    
+        function setSmartContract(address new_communicator_smart_contract) external;
+    
+        function viewNumber() external view returns (uint256);
+    
+        function execute() external;
     }
 }
 
-/// Declare that `Counter` is a contract with the following external methods.
+const RECEIVER_SMART_CONTRACT_ADDRESS: Address = address!("75e0e92a79880bd81a69f72983d03c75e2b33dc8");
+
+#[storage]
+#[entrypoint]
+pub struct COMMUNICATOR_SMART_CONTRACT{
+}
+
 #[public]
-impl Counter {
-    /// Gets the number from storage.
-    pub fn number(&self) -> U256 {
-        self.number.get()
+impl COMMUNICATOR_SMART_CONTRACT{
+    fn execute(&mut self) -> Result<(), Vec<u8>> {
+        let receiver_smart_contract = IReceiverSmartContract::new(RECEIVER_SMART_CONTRACT_ADDRESS);
+        receiver_smart_contract.execute(self);
+        Ok(())
     }
 
-    /// Sets a number in storage to a user-specified value.
-    pub fn set_number(&mut self, new_number: U256) {
-        self.number.set(new_number);
-    }
+    fn view(&self) -> Result<U256, Vec<u8>> {
+        let receiver_smart_contract = IReceiverSmartContract::new(RECEIVER_SMART_CONTRACT_ADDRESS);
+        let view_result = receiver_smart_contract.view_number(self);
+        if view_result.is_err(){
+            return Err(b"Failed to view the number".to_vec());
+        }
 
-    /// Sets a number in storage to a user-specified value.
-    pub fn mul_number(&mut self, new_number: U256) {
-        self.number.set(new_number * self.number.get());
-    }
-
-    /// Sets a number in storage to a user-specified value.
-    pub fn add_number(&mut self, new_number: U256) {
-        self.number.set(new_number + self.number.get());
-    }
-
-    /// Increments `number` and updates its value in storage.
-    pub fn increment(&mut self) {
-        let number = self.number.get();
-        self.set_number(number + U256::from(1));
+        Ok(view_result.unwrap())
     }
 }
+
