@@ -35,7 +35,7 @@ impl ReceiverSmartContract {
         Ok(())
     }
 
-    fn set_smart_contract(&mut self) -> Result<(), Vec<u8>>{
+    fn set_smart_contract(&mut self, new_communicator_smart_contract: alloy_primitives::Address) -> Result<(), Vec<u8>>{
         let initialized = self.initialized.get();
         if !initialized {
             return Err("Not initialized".into());
@@ -46,7 +46,7 @@ impl ReceiverSmartContract {
             return Err("Only the owner can set the executable smart contract".into());
         }
 
-        self.executable_smart_contract.set(msg::sender());
+        self.executable_smart_contract.set(new_communicator_smart_contract);
         Ok(())
     }
 
